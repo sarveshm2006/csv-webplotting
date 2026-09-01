@@ -44,3 +44,7 @@ while True:
             
             ser.write(b'EOF_MARKER\n')
             time.sleep(0.1)
+
+#2. main.py (ESP32 MicroPython Firmware)
+
+#This is the main firmware stored at the root of the ESP32. It includes the MAC address override for the EFUSE error and acts as a proxy server between your web browser and the Linux UART bridge.
