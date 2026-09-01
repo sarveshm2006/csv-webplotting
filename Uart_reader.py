@@ -5,7 +5,9 @@ import time
 
 PORT = '/dev/ttyACM0'  
 BAUD_RATE = 115200
-DATA_FOLDER = './data_csvs'
+
+# Use absolute path to avoid directory mismatch
+DATA_FOLDER = os.path.expanduser('~/data_csvs')
 
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
@@ -14,21 +16,24 @@ try:
     print(f"Listening on {PORT} at {BAUD_RATE} baud...")
 except serial.SerialException as e:
     print(f"Error opening port: {e}")
-    print("Tip: You may need to add your user to the 'dialout' group.")
     exit(1)
 
 while True:
     if ser.in_waiting > 0:
-        command = ser.readline().decode('utf-8').strip()
+        command = ser.readline().decode('utf-8', 'ignore').strip()
+        print(f"Received command from ESP32: {command}")
         
         if command == "LIST":
-            files = [f for f in os.listdir(DATA_FOLDER) if f.endswith('.csv')]
+            # Match both .csv and .CSV
+            files = [f for f in os.listdir(DATA_FOLDER) if f.lower().endswith('.csv')]
             response = json.dumps(files) + '\n'
+            print(f"Sending file list: {response.strip()}")
             ser.write(response.encode('utf-8'))
             
         elif command.startswith("GET:"):
             filename = command.split(":", 1)[1]
             filepath = os.path.join(DATA_FOLDER, filename)
+            print(f"Streaming file: {filepath}")
             
             if os.path.exists(filepath):
                 with open(filepath, 'r') as f:
