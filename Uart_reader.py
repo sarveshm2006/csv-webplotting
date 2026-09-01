@@ -1,16 +1,21 @@
-
-
 import serial
 import os
 import json
 import time
 
-COM_PORT = 'COM3'  # Update to your ESP32's port (e.g., /dev/ttyUSB0)
+PORT = '/dev/ttyACM0'  
 BAUD_RATE = 115200
 DATA_FOLDER = './data_csvs'
 
 os.makedirs(DATA_FOLDER, exist_ok=True)
-ser = serial.Serial(COM_PORT, BAUD_RATE, timeout=1)
+
+try:
+    ser = serial.Serial(PORT, BAUD_RATE, timeout=1)
+    print(f"Listening on {PORT} at {BAUD_RATE} baud...")
+except serial.SerialException as e:
+    print(f"Error opening port: {e}")
+    print("Tip: You may need to add your user to the 'dialout' group.")
+    exit(1)
 
 while True:
     if ser.in_waiting > 0:
@@ -33,4 +38,4 @@ while True:
                         ser.write(b'\n')
             
             ser.write(b'EOF_MARKER\n')
-            time.sleep(0.1) # Small buffer delay
+            time.sleep(0.1)
