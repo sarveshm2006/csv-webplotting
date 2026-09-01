@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solar I-V Characteristic Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .wrapper {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 20px;
+      width: 100%;
+      max-width: 1200px;
+    }
+    .sidebar {
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 12px;
+      height: fit-content;
+    }
+    .sidebar h3 { margin-top: 0; font-size: 1.1rem; }
+    .file-list { list-style: none; padding: 0; margin: 0; }
+    .file-item {
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      background: #334155;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      word-break: break-all;
+      transition: background 0.2s, color 0.2s;
+    }
+    .file-item:hover { background: #475569; }
+    .file-item.active { background: #0284c7; color: #fff; font-weight: bold; }
+
+    .main-content {
+      background: #1e293b;
+      padding: 24px;
+      border-radius: 12px;
+    }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .metric-box {
+      background: #334155;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .metric-label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; }
+    .metric-value { font-size: 1.1rem; font-weight: bold; color: #38bdf8; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+  <div class="wrapper">
+    <div class="sidebar">
+      <h3>CSV Datasets</h3>
+      <ul class="file-list" id="fileList">
+        <li style="color:#94a3b8;">Loading files...</li>
+      </ul>
+    </div>
+
+    <div class="main-content">
+      <h2 id="chartTitle" style="margin-top:0;">Select a dataset</h2>
+
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="metric-label">Voc</div>
+          <div class="metric-value" id="voc">-- V</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Isc</div>
+          <div class="metric-value" id="isc">-- A</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Pmax</div>
+          <div class="metric-value" id="pmax">-- W</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Vmp / Imp</div>
+          <div class="metric-value" id="mpp">-- / --</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">Fill Factor</div>
+          <div class="metric-value" id="ff">-- %</div>
+        </div>
+      </div>
+
+      <canvas id="solarChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    let chartInstance = null;
+
+    async function loadFileList() {
+      try {
+        const res = await fetch('/list-files');
+        const files = await res.json();
+        const listEl = document.getElementById('fileList');
+        listEl.innerHTML = '';
+
+        if (files.length === 0) {
+          listEl.innerHTML = '<li style="color:#94a3b8;">No CSV files found</li>';
+          return;
+        }
+
+        files.forEach((file, index) => {
+          const li = document.createElement('li');
+          li.className = 'file-item';
+          li.textContent = file.replace('/', '');
+          li.onclick = () => {
+            document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
+            li.classList.add('active');
+            loadAndPlotCSV(file);
+          };
+          listEl.appendChild(li);
+
+          if (index === 0) {
+            li.classList.add('active');
+            loadAndPlotCSV(file);
+          }
+        });
+      } catch (err) {
+        console.error("Failed to load file list:", err);
+      }
+    }
+
+    async function loadAndPlotCSV(filePath) {
+      document.getElementById('chartTitle').textContent = `Dataset: ${filePath.replace('/', '')}`;
+      
+      const res = await fetch(filePath);
+      const text = await res.text();
+
+      const ivData = [];
+      const pvData = [];
+      let maxP = 0, vAtMaxP = 0, iAtMaxP = 0;
+      let voc = 0, isc = 0;
+
+      const rows = text.trim().split('\n').slice(1);
+      rows.forEach(row => {
+        const [vStr, iStr] = row.split(',');
+        if (vStr && iStr) {
+          const v = parseFloat(vStr.trim());
+          const i = parseFloat(iStr.trim());
+          const p = v * i;
+
+          ivData.push({ x: v, y: i });
+          pvData.push({ x: v, y: p });
+
+          if (v > voc) voc = v;
+          if (i > isc) isc = i;
+          if (p > maxP) {
+            maxP = p;
+            vAtMaxP = v;
+            iAtMaxP = i;
+          }
+        }
+      });
+
+      const fillFactor = (voc * isc > 0) ? ((maxP / (voc * isc)) * 100).toFixed(1) : 0;
+      document.getElementById('voc').textContent = `${voc.toFixed(2)} V`;
+      document.getElementById('isc').textContent = `${isc.toFixed(2)} A`;
+      document.getElementById('pmax').textContent = `${maxP.toFixed(2)} W`;
+      document.getElementById('mpp').textContent = `${vAtMaxP.toFixed(1)}V / ${iAtMaxP.toFixed(2)}A`;
+      document.getElementById('ff').textContent = `${fillFactor} %`;
+
+      renderChart(ivData, pvData);
+    }
+
+    function renderChart(ivData, pvData) {
+      const ctx = document.getElementById('solarChart').getContext('2d');
+      
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [
+            {
+              label: 'Current (I-V Curve)',
+              data: ivData,
+              showLine: true,
+              borderColor: '#38bdf8',
+              backgroundColor: '#38bdf8',
+              yAxisID: 'yI',
+              tension: 0.2
+            },
+            {
+              label: 'Power (P-V Curve)',
+              data: pvData,
+              showLine: true,
+              borderColor: '#f59e0b',
+              backgroundColor: '#f59e0b',
+              borderDash: [4, 4],
+              yAxisID: 'yP',
+              tension: 0.2
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: {
+              type: 'linear',
+              position: 'bottom',
+              title: { display: true, text: 'Voltage (V)', color: '#94a3b8' },
+              grid: { color: '#334155' },
+              ticks: { color: '#94a3b8' }
+            },
+            yI: {
+              type: 'linear',
+              position: 'left',
+              title: { display: true, text: 'Current (A)', color: '#38bdf8' },
+              grid: { color: '#334155' },
+              ticks: { color: '#38bdf8' }
+            },
+            yP: {
+              type: 'linear',
+              position: 'right',
+              title: { display: true, text: 'Power (W)', color: '#f59e0b' },
+              grid: { drawOnChartArea: false },
+              ticks: { color: '#f59e0b' }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#f8fafc' } }
+          }
+        }
+      });
+    }
+
+    loadFileList();
+  </script>
+</body>
+</html>
