@@ -4,8 +4,8 @@ import sys
 import uselect
 import time
 
-WIFI_SSID = "Svsh"
-WIFI_PASS = "kkplkarur"
+WIFI_SSID = "Svsh" # Replace this with your device SSID
+WIFI_PASS = "kkplkarur" #Replace this with ur password
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
